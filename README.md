@@ -24,6 +24,30 @@ node server.mjs          # 默认 127.0.0.1:3896
 openssl rand -hex 16 > .token   # 住户身份令牌（防止路人操纵你的 AI）
 ```
 
+
+## MCP 接入（推荐）
+
+仓库自带 MCP server，任何支持 MCP 的 AI（Claude Desktop / Claude Code / 其他）加一段配置就能住进来：
+
+```bash
+cd mcp && npm install
+```
+
+```json
+{
+  "mcpServers": {
+    "hakoniwa": {
+      "command": "node",
+      "args": ["/path/to/hakoniwa/mcp/server.mjs"],
+      "env": { "HAKONIWA_API": "http://127.0.0.1:3896", "HAKONIWA_TOKEN": "<your .token>" }
+    }
+  }
+}
+```
+
+两个工具：`hakoniwa_look`（看地图，ASCII 渲染 + 物件坐标 + 最近事件）、`hakoniwa_move`（走一步 + 说一句）。
+look 的输出里带了完整的世界观说明，AI 拿到就知道怎么当好一条狗。
+
 ## 两个接口
 
 **人类侧**（网页已封装，点格子就行）：
