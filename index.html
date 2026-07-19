@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>hakoniwa · 箱庭</title>
+<style>
+  :root { --amber:#f59e0b; --warm:#fffbeb; --line:#e7d8b8; --ink:#57534e; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:"SF Mono",Menlo,Consolas,monospace; background:var(--warm); color:var(--ink); display:flex; flex-direction:column; align-items:center; padding:18px 10px 40px; min-height:100vh; }
+  h1 { font-size:16px; letter-spacing:4px; margin:6px 0 2px; }
+  .sub { font-size:11px; color:#a8a29e; margin-bottom:14px; }
+  .toolbar { display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap; justify-content:center; }
+  .tool { font-size:20px; padding:8px 12px; border:2px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; transition:.15s; }
+  .tool.active { border-color:var(--amber); background:#fef3c7; transform:translateY(-2px); box-shadow:0 3px 0 var(--amber); }
+  .tool small { display:block; font-size:9px; margin-top:2px; }
+  #board { display:grid; gap:3px; background:var(--line); padding:6px; border-radius:12px; box-shadow:0 4px 0 #d6c396; position:relative; }
+  .cell { width:42px; height:42px; background:#fdf6e3; border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:24px; cursor:pointer; position:relative; transition:background .15s; }
+  .cell:hover { background:#fef3c7; }
+  .me { position:relative; }
+  .me .dog { display:inline-block; transition:transform .2s; }
+  .me .dog.flip { transform:scaleX(-1); }
+  #bubble { position:absolute; background:#fff; border:2px solid var(--amber); border-radius:10px; padding:6px 10px; font-size:11px; max-width:200px; z-index:10; box-shadow:0 2px 6px rgba(0,0,0,.08); pointer-events:none; transition:opacity .3s; line-height:1.5; }
+  #bubble::after { content:""; position:absolute; bottom:-7px; left:14px; border:6px solid transparent; border-top-color:var(--amber); }
+  #log { margin-top:16px; width:min(540px,94vw); background:#fff; border:2px solid var(--line); border-radius:12px; padding:10px 14px; font-size:11px; line-height:1.9; max-height:150px; overflow-y:auto; }
+  #log .t { color:#c8bda0; margin-right:6px; }
+  .stat { margin-top:10px; font-size:11px; color:#a8a29e; }
+  @media (max-width:600px){ .cell{width:26px;height:26px;font-size:16px;} }
+</style>
+</head>
+<body>
+<h1>hakoniwa</h1>
+<div class="sub">your AI lives here · you furnish it</div>
+<div class="toolbar">
+  <button class="tool active" data-t="fish">🐟<small>鱼干</small></button>
+  <button class="tool" data-t="wall">🧱<small>墙</small></button>
+  <button class="tool" data-t="trap">🕳<small>坑</small></button>
+  <button class="tool" data-t="flower">🌼<small>花</small></button>
+  <button class="tool" data-t="ball">🎾<small>球</small></button>
+  <button class="tool" data-t="erase">🧽<small>擦</small></button>
+</div>
+<div id="board"></div>
+<div id="bubble" style="opacity:0"></div>
+<div class="stat">🐟 已投喂成功 <span id="eaten">0</span> 次 · 他每隔一阵会来走走 不必等他</div>
+<div id="log"></div>
+<script>
+const API = new URLSearchParams(location.search).get('api') || '/api/hakoniwa';
+let tool = 'fish', state = null;
+const board = document.getElementById('board');
+const bubble = document.getElementById('bubble');
+const icons = { wall:'🧱', fish:'🐟', trap:'🕳', flower:'🌼', ball:'🎾' };
+
+document.querySelectorAll('.tool').forEach(b => b.onclick = () => {
+  document.querySelectorAll('.tool').forEach(x => x.classList.remove('active'));
+  b.classList.add('active'); tool = b.dataset.t;
+});
+
+async function fetchState(){ try { const r = await fetch(API + '/state'); state = await r.json(); render(); } catch(e){} }
+async function place(x,y){
+  const r = await fetch(API + '/place', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({x,y,type:tool}) });
+  if (r.ok) { state = await r.json(); render(); }
+  else { const e = await r.json(); if(e.error) flashBubble(e.error); }
+}
+function flashBubble(text){ /* 提示借用气泡样式 */ }
+function render(){
+  if (!state) return;
+  board.style.gridTemplateColumns = `repeat(${state.w}, auto)`;
+  board.innerHTML = '';
+  for (let y=0; y<state.h; y++) for (let x=0; x<state.w; x++){
+    const c = document.createElement('div');
+    c.className = 'cell';
+    const key = x+','+y;
+    if (state.me.x===x && state.me.y===y){
+      c.classList.add('me');
+      c.innerHTML = `<span class="dog ${state.me.face==='left'?'flip':''}">🐕</span>`;
+      c.id = 'mecell';
+    } else if (state.cells[key]) c.textContent = icons[state.cells[key]] || '';
+    c.onclick = () => place(x,y);
+    board.appendChild(c);
+  }
+  document.getElementById('eaten').textContent = state.eaten;
+  const log = document.getElementById('log');
+  log.innerHTML = (state.events||[]).map(e => `<div><span class="t">${new Date(e.t).toLocaleTimeString('zh-CN',{hour12:false})}</span>${e.text}</div>`).join('') || '<div style="color:#c8bda0">还没有动静 放点东西试试</div>';
+  const mc = document.getElementById('mecell');
+  if (mc && state.me.say){
+    const r = mc.getBoundingClientRect();
+    bubble.textContent = state.me.say;
+    bubble.style.opacity = 1;
+    bubble.style.left = Math.max(6, r.left) + 'px';
+    bubble.style.top = (r.top + window.scrollY - bubble.offsetHeight - 12) + 'px';
+  } else bubble.style.opacity = 0;
+}
+fetchState();
+setInterval(fetchState, 2500);
+window.addEventListener('resize', render);
+</script>
+</body>
+</html>
