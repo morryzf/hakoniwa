@@ -28,6 +28,11 @@ const server = http.createServer((req, res) => {
   if (req.method === "OPTIONS") { res.writeHead(204, cors); return res.end(); }
   const url = new URL(req.url, "http://x");
   const send = (code, obj) => { res.writeHead(code, { "Content-Type": "application/json", ...cors }); res.end(JSON.stringify(obj)); };
+  if (req.method === "GET" && (url.pathname === "/" || url.pathname === "/index.html")) {
+  const html = fs.readFileSync(path.join(import.meta.dirname || ".", "index.html"), "utf8");
+  res.writeHead(200, { "Content-Type": "text/html", ...cors });
+  return res.end(html);
+}
 
   if (req.method === "GET" && url.pathname.endsWith("/state")) return send(200, load());
 
